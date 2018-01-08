@@ -1,0 +1,111 @@
+diff --git a/arch/x86/kvm/vmx.c b/arch/x86/kvm/vmx.c
+index a6f4f095f8f4..a6e1bb75b68e 100644
+--- a/arch/x86/kvm/vmx.c
++++ b/arch/x86/kvm/vmx.c
+@@ -8756,6 +8756,26 @@ static void dump_vmcs(void)
+  * The guest has exited.  See if we can fix it or if we need userspace
+  * assistance.
+  */
++
++//global variables here
++
++struct exit_data{
++int exit_no ;
++char exit_reason_string[50];
++long no_of_exits;
++long time_spent ;
++long max ;
++long min ;
++long avg ;
++};
++
++struct exit_data array_exit[65];
++
++unsigned int special_i =0;
++long no_of_exits = 0;
++long total_time = 0;
++int temp = 0 ;
++long start = 0, end = 0;
+ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
+ {
+ 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+@@ -8822,9 +8842,78 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
+ 		return 0;
+ 	}
+ 
++
+ 	if (exit_reason < kvm_vmx_max_exit_handlers
+ 	    && kvm_vmx_exit_handlers[exit_reason])
+-		return kvm_vmx_exit_handlers[exit_reason](vcpu);
++		{
++		//rdtsc to get the timestamp before handling exit , 
++			no_of_exits ++ ;		
++
++
++////////////////////////////////////////update array_exit for each type of exit//////////////////////////////////////////////////////////////////
++
++		
++array_exit[3].exit_no = -1;
++array_exit[4].exit_no = -1;
++array_exit[5].exit_no = -1;
++array_exit[6].exit_no = -1;
++array_exit[11].exit_no = -1;
++array_exit[17].exit_no = -1;
++array_exit[35].exit_no = -1;
++array_exit[38].exit_no = -1;
++array_exit[42].exit_no = -1;
++
++
++array_exit[exit_reason].no_of_exits ++;
++		
++		start = rdtsc();
++
++		temp = kvm_vmx_exit_handlers[exit_reason](vcpu);
++		end = rdtsc();
++		//printk("The time to handle the exit is %ld", end-start);
++		total_time  = total_time + (end-start);
++///////////////////////////////////////////////////////////////////////////array_exit time spent, max,min,avg ////////////////////////////////////
++		array_exit[exit_reason].time_spent += (end-start);
++		if( array_exit[exit_reason].max < (end-start))
++		{
++			array_exit[exit_reason].max = (end-start);
++		}
++		if( array_exit[exit_reason].min > (end-start) || array_exit[exit_reason].min == 0)
++		{
++			array_exit[exit_reason].min = (end-start);
++		}
++			array_exit[exit_reason].avg = array_exit[exit_reason].time_spent / array_exit[exit_reason].no_of_exits ;
++
++		if(no_of_exits % 500 == 0)
++			{
++printk("===================================================================================================================================");	
++				printk("No of exits : %ld",no_of_exits);
++				printk("Total time  : %ld",total_time);
++
++printk("==================================================================================================================");					
++				for( special_i = 0 ; special_i < 65 ; special_i++)
++				{
++				  	if( array_exit[special_i].exit_no != -1)
++					{
++						unsigned int jj1 = 0;
++						static const struct trace_print_flags exit_symbols[] = { VMX_EXIT_REASONS };
++						for(jj1= 0; jj1 < 56; jj1++)
++							if(exit_symbols[jj1].mask==special_i)
++								break;
++						printk("exit reason : %d -- %s",special_i,exit_symbols[jj1].name);
++						printk("average time for exit reason %d is %ld",special_i,array_exit[special_i].avg);
++						printk("max time for exit reason %d is %ld",special_i,array_exit[special_i].max);
++						printk("min time for exit reason %d is %ld",special_i,array_exit[special_i].min);
++						printk("total time for exit reason %d is %ld",special_i,array_exit[special_i].time_spent);
++						printk("total no of times exit reason %d happened is %ld",special_i,array_exit[special_i].no_of_exits);
++					}
++				}				
++			
++ 			}
++		
++		return temp;
++		}
++
+ 	else {
+ 		vcpu_unimpl(vcpu, "vmx: unexpected exit reason 0x%x\n",
+ 				exit_reason);
